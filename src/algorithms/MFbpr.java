@@ -31,6 +31,8 @@ public class MFbpr extends TopKRecommender {
 	double reg = 0.01; 	// regularization parameters
   double init_mean = 0;  // Gaussian mean for init V
   double init_stdev = 0.1; // Gaussian std-dev for init V
+  // Dynamic Negative Sampling [Zhang et al. SIGIR 2013]: sample X negatives and use the one with maximum predicted value as the true negative.
+  double num_dns = 1;	// number of dynamic negative samples. 
 	
   /** Model parameters to learn */
   public DenseMatrix U;	// latent vectors for users
@@ -42,7 +44,7 @@ public class MFbpr extends TopKRecommender {
   Random rand = new Random();
 	public MFbpr(SparseMatrix trainMatrix, ArrayList<Rating> testRatings,
 			int topK, int threadNum, int factors, int maxIter, double lr, boolean adaptive, double reg, 
-			double init_mean, double init_stdev, boolean showProgress) {
+			double init_mean, double init_stdev, int num_dns, boolean showProgress) {
 		super(trainMatrix, testRatings, topK, threadNum);
 		this.factors = factors;
 		this.maxIter = maxIter;
@@ -51,6 +53,7 @@ public class MFbpr extends TopKRecommender {
 		this.reg = reg;
 		this.init_mean = init_mean;
 		this.init_stdev = init_stdev;
+		this.num_dns = num_dns;
 		this.showProgress = showProgress;
 		
 		// Init model parameters
@@ -86,8 +89,8 @@ public class MFbpr extends TopKRecommender {
 				update_ui(u, i);
 			}
 		
-			// Show progress
-			if (showProgress)
+			// Show progress per 10 epochs
+			if (showProgress && iter%10 == 0)
 				showProgress(iter, start, testRatings);
 			
 			// Adjust the learning rate
@@ -97,9 +100,7 @@ public class MFbpr extends TopKRecommender {
 				lr = hr > hr_prev ? lr * 1.05 : lr * 0.5;
 				hr_prev = hr;
 			}
-			
 		} // end for iter
-		
 	}
 	
 	public void runOneIteration() {
@@ -121,10 +122,22 @@ public class MFbpr extends TopKRecommender {
 	
 	//One SGD step for a positive instance.
 	private void update_ui(int u, int i) {
-		// sample a negative item (uniformly random)
-		int j = rand.nextInt(itemCount);
-		while (trainMatrix.getValue(u, j) != 0) {
-			j = rand.nextInt(itemCount);
+		// Dynamic negative sampling		
+		// sample a negative item
+		int s = rand.nextInt(itemCount);
+		while (trainMatrix.getValue(u, s) != 0) {
+			s = rand.nextInt(itemCount);
+		}
+		int j = s;	// record the negative example with the largest predict value
+		for (int k = 1; k < this.num_dns; k ++) {
+			// sample another negative item
+			s = rand.nextInt(itemCount);
+			while (trainMatrix.getValue(u, s) != 0) {
+				s = rand.nextInt(itemCount);
+			}
+			if (predict(u, s) > predict(u, j)) {
+				j = s;
+			}
 		}
 		
 		// BPR update rules

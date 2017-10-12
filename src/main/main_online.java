@@ -79,14 +79,12 @@ public class main_online extends main {
 		
 		if (method.equalsIgnoreCase("bpr")) {
 			MFbpr bpr = new MFbpr(trainMatrix, testRatings, topK, threadNum, 
-					factors, maxIter, w0, false, reg, init_mean, init_stdev, showProgress);
+					factors, maxIter, 0.01, false, reg, init_mean, init_stdev, 1, showProgress);
 			bpr.onlineMode = onlineMode;
 			bpr.buildModel();
 			bpr.maxIterOnline = maxIterOnline;
 			evaluate_model_online(bpr, "BPR", interval);
 		}
-		
-		
 	
 	} // end main
 }
